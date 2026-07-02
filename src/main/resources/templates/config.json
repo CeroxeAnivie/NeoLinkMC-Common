@@ -1,0 +1,12 @@
+{
+  "remote_domain": "mc.ceroxe.top",
+  "host_hook_port": "44801",
+  "host_connect_port": "44802",
+  "local_port": "25565",
+  "local_domain": "localhost",
+  "gamemode": "SURVIVAL",
+  "onlinemode": "OFFLINE_TRY_ONLINE_UUID_FIRST",
+  "pvp_allowed": true,
+  "allow_cheats": true,
+  "max_players": 8
+}

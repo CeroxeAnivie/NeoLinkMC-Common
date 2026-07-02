@@ -1,0 +1,237 @@
+# ============================================
+# NeoLinkMC - Minecraft Fabric Mod
+# Comprehensive .gitignore
+# ============================================
+
+# ============================================
+# Gradle
+# ============================================
+.gradle/
+/build/
+**/build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# Gradle 守护进程（只在 Gradle 用户主目录下的才忽略）
+/daemon/
+/caches/
+/native/
+/wrapper/dists/
+
+# ============================================
+# IntelliJ IDEA
+# ============================================
+/.idea/
+*.iws
+*.iml
+*.ipr
+/out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+# IntelliJ 运行配置
+.idea/runConfigurations/
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/usage.statistics.xml
+.idea/dictionaries/
+.idea/shelf/
+.idea/gradle.xml
+.idea/libraries/
+.idea/modules.xml
+.idea/vcs.xml
+
+# ============================================
+# Eclipse
+# ============================================
+/.apt_generated
+/.classpath
+/.factorypath
+/.project
+/.settings/
+/.springBeans
+/.sts4-cache
+/bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+# ============================================
+# NetBeans
+# ============================================
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# ============================================
+# VS Code
+# ============================================
+/.vscode/
+*.code-workspace
+/.history/
+
+# ============================================
+# Minecraft / Fabric 特定
+# ============================================
+# 运行目录（项目根目录下的）
+/run/
+/runs/
+/run-server/
+/run-client/
+/run-data/
+
+# Minecraft 生成的文件（只在根目录下的才忽略，避免误伤源代码）
+/saves/
+/logs/
+/mods/
+/config/
+/crash-reports/
+/screenshots/
+/resourcepacks/
+/shaderpacks/
+
+# Fabric 特定（只在根目录下的才忽略）
+/.fabric/
+/.remapped/
+
+# ============================================
+# Java
+# ============================================
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/mappings/*.jar
+*.war
+*.ear
+*.nar
+
+# 包文件
+*.zip
+*.tar.gz
+*.rar
+
+# ============================================
+# JVM 错误日志
+# ============================================
+hs_err_pid*
+replay_pid*
+*.hprof
+
+# ============================================
+# 日志文件（只在根目录下的才忽略）
+# 注意：logs/ 前面不加 / 会匹配所有子目录，可能导致误伤
+# ============================================
+/*.log
+/logs/
+/log/
+
+# ============================================
+# 运行时文件
+# ============================================
+*.pid
+*.seed
+*.pid.lock
+
+# ============================================
+# 临时文件
+# ============================================
+*.tmp
+*.temp
+*.swp
+*~
+*.bak
+*.orig
+
+# ============================================
+# 操作系统文件
+# ============================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.nfs*
+.directory
+.Trash-*
+
+# ============================================
+# 应用特定配置
+# ============================================
+# NeoLinkMC 运行时文件
+eula.txt
+# 注意：只忽略运行时生成的 config.json，不忽略模板文件
+/config.json
+*.cache
+/cache/
+
+# 本地配置文件（包含敏感信息）
+local.properties
+secrets.properties
+application-local.properties
+
+# ============================================
+# 测试相关
+# ============================================
+/test-output/
+/test-results/
+
+# ============================================
+# 依赖缓存（如果使用本地仓库）
+# ============================================
+/repo/
+
+# ============================================
+# 构建输出
+# ============================================
+*.exe
+*.dll
+*.so
+*.dylib
+
+# ============================================
+# 文档生成
+# ============================================
+/javadoc/
+/docs/javadoc/
+
+# ============================================
+# 其他
+# ============================================
+*.map
+*.lst
+*.dmp
+
+# 忽略所有隐藏文件，但保留.gitignore 和 .gitattributes
+.*
+!.gitignore
+!.gitattributes
+!.github/
+!.idea/
+.idea/*
+!.idea/gradle.xml
+
+# 忽略 node_modules（如果有前端构建）
+/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 忽略 Python 缓存（如果有脚本）
+__pycache__/
+*.py[cod]
+*$py.class
