@@ -11,65 +11,93 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
- * loader-specific mixin 入口共用的 UUID 修复服务。
+ * Shared UUID repair service used by loader-specific mixins.
  */
 public final class UUIDFixer {
+    private static final Duration LOOKUP_TIMEOUT = Duration.ofSeconds(5);
+    private static final int MAX_CACHE_ENTRIES = 512;
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5))
+            .connectTimeout(LOOKUP_TIMEOUT)
             .build();
+    private static final ConcurrentMap<String, Optional<UUID>> LOOKUP_CACHE = new ConcurrentHashMap<>();
 
-    public static boolean tryOnlineFirst = false;
-    public static List<String> alwaysOfflinePlayers = Collections.emptyList();
-
-    private static boolean enabled = false;
+    private static volatile boolean tryOnlineFirst;
+    private static volatile Set<String> alwaysOfflinePlayers = Set.of();
+    private static volatile Function<String, UUID> officialUuidResolver = UUIDFixer::queryOfficialUUID;
 
     private UUIDFixer() {
     }
 
-    public static void enableFixer() {
-        enabled = true;
+    public static void setTryOnlineFirst(boolean enabled) {
+        tryOnlineFirst = enabled;
     }
 
-    public static void disableFixer() {
-        enabled = false;
-    }
+    public static void setAlwaysOfflinePlayers(List<String> players) {
+        if (players == null || players.isEmpty()) {
+            alwaysOfflinePlayers = Set.of();
+            return;
+        }
 
-    public static boolean isEnabled() {
-        return enabled;
-    }
-
-    public static void setEnabled(boolean enabled) {
-        UUIDFixer.enabled = enabled;
+        alwaysOfflinePlayers = players.stream()
+                .map(UUIDFixer::normalizeName)
+                .filter(name -> !name.isEmpty())
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     public static UUID hookEntry(String playerName) {
-        if (playerName == null || playerName.isBlank()) {
+        String normalizedName = normalizeName(playerName);
+        if (normalizedName.isEmpty() || !tryOnlineFirst) {
             return null;
         }
 
-        if (alwaysOfflinePlayers.contains(playerName)) {
+        if (alwaysOfflinePlayers.contains(normalizedName)) {
             return null;
         }
 
-        return tryOnlineFirst ? getOfficialUUID(playerName) : null;
+        trimCacheIfNeeded();
+        return LOOKUP_CACHE.computeIfAbsent(
+                normalizedName,
+                name -> Optional.ofNullable(officialUuidResolver.apply(name))
+        ).orElse(null);
     }
 
     public static UUID getOfficialUUID(String playerName) {
-        String normalizedName = playerName == null ? "" : playerName.trim();
+        String normalizedName = normalizeName(playerName);
         if (normalizedName.isEmpty()) {
             return null;
         }
+        return officialUuidResolver.apply(normalizedName);
+    }
 
+    static void resetStateForTest() {
+        tryOnlineFirst = false;
+        alwaysOfflinePlayers = Set.of();
+        officialUuidResolver = UUIDFixer::queryOfficialUUID;
+        LOOKUP_CACHE.clear();
+    }
+
+    static void setOfficialUuidResolverForTest(Function<String, UUID> resolver) {
+        officialUuidResolver = resolver == null ? UUIDFixer::queryOfficialUUID : resolver;
+        LOOKUP_CACHE.clear();
+    }
+
+    private static UUID queryOfficialUUID(String normalizedName) {
         String url = "https://api.mojang.com/users/profiles/minecraft/" + normalizedName;
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
-                    .timeout(Duration.ofSeconds(5))
+                    .timeout(LOOKUP_TIMEOUT)
                     .GET()
                     .build();
             HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
@@ -79,16 +107,26 @@ public final class UUIDFixer {
             }
 
             JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
-            String responseName = root.getAsJsonPrimitive("name").getAsString();
+            String responseName = normalizeName(root.getAsJsonPrimitive("name").getAsString());
             String uuidString = root.getAsJsonPrimitive("id").getAsString();
             UUID uuid = parseUUIDFromString(uuidString);
-            return responseName.equalsIgnoreCase(normalizedName) ? uuid : null;
+            return responseName.equals(normalizedName) ? uuid : null;
         } catch (IOException | InterruptedException | JsonSyntaxException | IllegalStateException e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            NeoLinkCore.LOGGER.debug("获取正版 UUID 失败: {}", normalizedName, e);
+            NeoLinkCore.LOGGER.debug("Failed to fetch official UUID for {}", normalizedName, e);
             return null;
+        }
+    }
+
+    private static String normalizeName(String playerName) {
+        return playerName == null ? "" : playerName.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static void trimCacheIfNeeded() {
+        if (LOOKUP_CACHE.size() > MAX_CACHE_ENTRIES) {
+            LOOKUP_CACHE.clear();
         }
     }
 

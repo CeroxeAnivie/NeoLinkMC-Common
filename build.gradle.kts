@@ -77,41 +77,49 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
+fun MavenPom.configureNeoLinkMcCommonPom() {
+    name.set("NeoLinkMC Common")
+    description.set("Shared JVM core, config model and tunnel orchestration used by NeoLinkMC loader adapters.")
+    url.set("https://github.com/CeroxeAnivie/NeoLinkMC-Common")
+
+    licenses {
+        license {
+            name.set("MIT License")
+            url.set("https://opensource.org/licenses/MIT")
+            distribution.set("repo")
+        }
+    }
+
+    developers {
+        developer {
+            id.set("CeroxeAnivie")
+            name.set("Ceroxe")
+            email.set("1591117599@qq.com")
+            organization.set("Ceroxe")
+            url.set("https://github.com/CeroxeAnivie")
+        }
+    }
+
+    scm {
+        connection.set("scm:git:git://github.com/CeroxeAnivie/NeoLinkMC-Common.git")
+        developerConnection.set("scm:git:ssh://github.com:CeroxeAnivie/NeoLinkMC-Common.git")
+        url.set("https://github.com/CeroxeAnivie/NeoLinkMC-Common")
+    }
+}
+
 publishing {
     publications {
         create<MavenPublication>("mavenJava") {
             from(components["java"])
             artifactId = "neolinkmc-common"
+            pom.configureNeoLinkMcCommonPom()
+        }
 
-            pom {
-                name.set("NeoLinkMC Common")
-                description.set("Shared JVM core, config model and tunnel orchestration used by NeoLinkMC loader adapters.")
-                url.set("https://github.com/CeroxeAnivie/NeoLinkMC-Common")
-
-                licenses {
-                    license {
-                        name.set("MIT License")
-                        url.set("https://opensource.org/licenses/MIT")
-                        distribution.set("repo")
-                    }
-                }
-
-                developers {
-                    developer {
-                        id.set("CeroxeAnivie")
-                        name.set("Ceroxe")
-                        email.set("1591117599@qq.com")
-                        organization.set("Ceroxe")
-                        url.set("https://github.com/CeroxeAnivie")
-                    }
-                }
-
-                scm {
-                    connection.set("scm:git:git://github.com/CeroxeAnivie/NeoLinkMC-Common.git")
-                    developerConnection.set("scm:git:ssh://github.com:CeroxeAnivie/NeoLinkMC-Common.git")
-                    url.set("https://github.com/CeroxeAnivie/NeoLinkMC-Common")
-                }
-            }
+        create<MavenPublication>("localDevelopment") {
+            artifactId = "neolinkmc-common"
+            artifact(tasks.named("jar"))
+            artifact(tasks.named("sourcesJar"))
+            pom.configureNeoLinkMcCommonPom()
         }
     }
 
@@ -127,9 +135,16 @@ publishing {
     }
 }
 
+tasks.matching { task ->
+    task.name == "publishLocalDevelopmentPublicationToCentralStagingRepository" ||
+        task.name == "publishLocalDevelopmentPublicationToMavenLocal"
+}.configureEach {
+    enabled = false
+}
+
 signing {
     val signingRequested = gradle.startParameter.taskNames.any { taskName ->
-        taskName.contains("publish", ignoreCase = true) && !taskName.contains("MavenLocal", ignoreCase = true)
+        taskName.contains("CentralStaging", ignoreCase = true) || taskName == "publish"
     }
     isRequired = signingRequested
     if (signingRequested) {

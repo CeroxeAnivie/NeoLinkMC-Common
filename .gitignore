@@ -221,9 +221,6 @@ application-local.properties
 !.gitignore
 !.gitattributes
 !.github/
-!.idea/
-.idea/*
-!.idea/gradle.xml
 
 # 忽略 node_modules（如果有前端构建）
 /node_modules/

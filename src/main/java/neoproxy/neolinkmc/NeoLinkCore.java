@@ -4,22 +4,23 @@ import neoproxy.neolinkmc.config.ConnectionConfig;
 import neoproxy.neolinkmc.config.SharedNeoLinkConfig;
 import neoproxy.neolinkmc.service.ConnectionService;
 import neoproxy.neolinkmc.service.MessageHandler;
+import neoproxy.neolinkmc.service.TunnelState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 /**
- * Loader-neutral 的 NeoLinkMC 生命周期。
- *
- * <p>Fabric、Forge 与 NeoForge 的 event bus 和 metadata 格式各不相同，但 tunnel
- * 生命周期必须完全一致。将这部分行为收敛到这里，可以避免细微的平台漂移，
- * 例如某个 loader 使用不同端口校验规则，或在单人 server 关闭时忘记停止 tunnel。</p>
+ * Loader-neutral lifecycle coordinator for NeoLinkMC.
  */
 public final class NeoLinkCore {
     public static final String MOD_ID = "neolinkmc";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+    private static final long STOP_WAIT_TIMEOUT_MILLIS = 3_000L;
+
+    private static final Object SERVICE_LOCK = new Object();
 
     private static volatile ConnectionService connectionService;
     private static volatile MessageHandler messageHandler;
@@ -34,15 +35,9 @@ public final class NeoLinkCore {
         version = loaderVersion == null || loaderVersion.isBlank() ? "unknown" : loaderVersion.trim();
         messageHandler = Objects.requireNonNull(handler, "handler");
 
-        LOGGER.info("╔════════════════════════════════════════════════════════╗");
-        LOGGER.info("║         NeoLinkMC Mod 正在初始化...                    ║");
-        LOGGER.info("╚════════════════════════════════════════════════════════╝");
-        LOGGER.info("Mod 版本: {}", version);
-
         SharedNeoLinkConfig.init(configDir);
-        LOGGER.info("配置系统初始化完成");
-        LOGGER.debug("配置目录路径: {}", SharedNeoLinkConfig.getConfigDir());
-        LOGGER.info("NeoLinkMC Mod 初始化完成");
+        LOGGER.info("NeoLinkMC initialized. version={}", version);
+        LOGGER.debug("Config directory: {}", SharedNeoLinkConfig.getConfigDir());
     }
 
     public static Path getConfigDir() {
@@ -67,34 +62,62 @@ public final class NeoLinkCore {
 
     public static void startService(String key, int port) {
         LOGGER.debug("startService() called with port: {}", port);
-        try {
-            if (connectionService == null) {
-                connectionService = new ConnectionService(resolveMessageHandler());
-                connectionService.start(new ConnectionConfig(
-                        SharedNeoLinkConfig.getRemoteDomain(),
-                        ConnectionConfig.DEFAULT_LOCAL_DOMAIN,
-                        SharedNeoLinkConfig.getHookPort(),
-                        SharedNeoLinkConfig.getHostConnectPort(),
-                        key,
-                        port > 0 ? port : SharedNeoLinkConfig.getLocalPort()
-                ));
-                LOGGER.info("NeoLink 核心服务启动成功");
+
+        ConnectionService nextService;
+        synchronized (SERVICE_LOCK) {
+            if (connectionService != null && connectionService.isRunning()) {
+                LOGGER.warn("NeoLink service is already starting or running; duplicate start request ignored.");
+                return;
             }
+
+            nextService = new ConnectionService(resolveMessageHandler());
+            connectionService = nextService;
+        }
+
+        try {
+            nextService.start(new ConnectionConfig(
+                    SharedNeoLinkConfig.getRemoteDomain(),
+                    ConnectionConfig.DEFAULT_LOCAL_DOMAIN,
+                    SharedNeoLinkConfig.getHookPort(),
+                    SharedNeoLinkConfig.getHostConnectPort(),
+                    key,
+                    port > 0 ? port : SharedNeoLinkConfig.getLocalPort()
+            ));
+
+            if (nextService.getState() == TunnelState.FAILED) {
+                clearConnectionService(nextService);
+                return;
+            }
+
+            LOGGER.info("NeoLink core service started.");
         } catch (Exception e) {
-            LOGGER.error("NeoLink 核心服务启动失败", e);
+            clearConnectionService(nextService);
+            LOGGER.error("Failed to start NeoLink core service.", e);
         }
     }
 
     public static void stopService() {
         LOGGER.debug("stopService() called");
+
+        ConnectionService activeService;
+        synchronized (SERVICE_LOCK) {
+            activeService = connectionService;
+            connectionService = null;
+        }
+
         try {
-            if (connectionService != null) {
-                connectionService.stop();
-                connectionService = null;
-                LOGGER.info("NeoLink 核心服务已停止");
+            if (activeService != null) {
+                activeService.stop();
+                if (!activeService.awaitStopped(STOP_WAIT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+                    LOGGER.warn(
+                            "NeoLink worker did not stop within {} ms; continuing shutdown without blocking Minecraft.",
+                            STOP_WAIT_TIMEOUT_MILLIS
+                    );
+                }
+                LOGGER.info("NeoLink core service stopped.");
             }
         } catch (Exception e) {
-            LOGGER.error("NeoLink 核心服务停止时出错", e);
+            LOGGER.error("Failed to stop NeoLink core service.", e);
         }
     }
 
@@ -103,54 +126,74 @@ public final class NeoLinkCore {
     }
 
     public static boolean isRunning() {
-        return connectionService != null && connectionService.isRunning();
+        ConnectionService active = connectionService;
+        return active != null && active.isRunning();
     }
 
     public static void updateLocalPort(int port) {
         LOGGER.debug("updateLocalPort() called with port: {}", port);
-        LOGGER.warn("服务启动后不再支持热更新本地端口，请停止后用新 LAN 端口重新启动。");
+        LOGGER.warn("Local port hot-reload is not supported after startup. Restart the tunnel with the new LAN port.");
     }
 
     public static void updateConnectionService(ConnectionService service) {
         LOGGER.debug("updateConnectionService() called");
-        if (connectionService != null && connectionService.isRunning()) {
-            LOGGER.warn("已有运行中的服务，先停止旧服务");
-            connectionService.stop();
+        Objects.requireNonNull(service, "service");
+
+        ConnectionService previousService;
+        synchronized (SERVICE_LOCK) {
+            previousService = connectionService;
+            connectionService = service;
         }
-        connectionService = service;
-        LOGGER.info("NeoLinkMC 连接服务已更新");
+
+        if (previousService != null && previousService != service && previousService.isRunning()) {
+            LOGGER.warn("Replacing a running NeoLink service; stopping the previous instance first.");
+            previousService.stop();
+        }
+        LOGGER.info("NeoLinkMC connection service updated.");
     }
 
     public static void onClientStarted() {
-        LOGGER.info("Minecraft 客户端启动完成");
+        LOGGER.info("Minecraft client started.");
     }
 
     public static void onClientStopping() {
-        LOGGER.info("Minecraft 客户端正在停止，关闭 NeoLink 服务");
+        LOGGER.info("Minecraft client is stopping; shutting down NeoLink service.");
         stopService();
     }
 
     public static void onServerStarted(int port) {
-        LOGGER.info("Minecraft 服务器启动完成，端口: {}", port);
+        LOGGER.info("Minecraft server started on port {}", port);
     }
 
     public static void onServerStopping(boolean integratedServer) {
-        LOGGER.info("Minecraft 服务器正在停止");
+        LOGGER.info("Minecraft server is stopping.");
         if (integratedServer) {
-            LOGGER.info("[NeoLinkMC] 单人游戏服务器停止，停止服务...");
+            LOGGER.info("Integrated server is stopping; shutting down NeoLink service.");
             stopService();
         }
     }
 
     public static void onLocalPlayDisconnect() {
-        LOGGER.info("[NeoLinkMC] 房主断开连接，停止服务...");
+        LOGGER.info("Local play disconnected; shutting down NeoLink service.");
         stopService();
     }
 
     public static void onTitleScreenTick() {
         if (isRunning()) {
-            LOGGER.info("[NeoLinkMC] 检测到回到主界面，停止服务...");
+            LOGGER.info("Detected title screen while tunnel is active; shutting down NeoLink service.");
             stopService();
+        }
+    }
+
+    public static void clearConnectionService(ConnectionService service) {
+        if (service == null) {
+            return;
+        }
+
+        synchronized (SERVICE_LOCK) {
+            if (connectionService == service) {
+                connectionService = null;
+            }
         }
     }
 

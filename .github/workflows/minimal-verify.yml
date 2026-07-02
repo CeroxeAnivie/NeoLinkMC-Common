@@ -1,0 +1,25 @@
+name: minimal-verify
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  publish-local-development:
+    runs-on: windows-latest
+    env:
+      GRADLE_USER_HOME: ${{ runner.temp }}\neolinkmc-gradle-home
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: gradle
+
+      - name: Publish local development artifacts
+        shell: cmd
+        run: gradlew.bat publishLocalDevelopmentPublicationToLocalDevelopmentRepository

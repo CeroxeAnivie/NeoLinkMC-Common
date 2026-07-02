@@ -1,28 +1,25 @@
 package neoproxy.neolinkmc.service;
 
+import neoproxy.neolinkmc.NeoLinkCore;
 import neoproxy.neolinkmc.config.ConnectionConfig;
 import top.ceroxe.api.neolink.NeoLinkAPI;
 import top.ceroxe.api.neolink.NeoLinkCfg;
 import top.ceroxe.api.neolink.NeoLinkState;
 
 import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Loader-neutral adapter for the NeoLink tunnel lifecycle.
- *
- * <p>The API object owns the actual networking workers. This adapter keeps Minecraft-facing
- * state transitions deterministic, so loader modules do not need to duplicate socket or
- * shutdown orchestration.</p>
  */
 public final class ConnectionService implements AutoCloseable {
     private static final int DEFAULT_CONNECT_TIMEOUT_MILLIS = 5_000;
     private static final double LOW_TRAFFIC_REMAINING_MIB = 100.0D;
     private static final Pattern TRAFFIC_QUOTA_PATTERN = Pattern.compile(
-            "这个密钥有\\s*([0-9]+(?:\\.[0-9]+)?)\\s*(MiB|MIB|MB|GiB|GIB|GB)\\s*流量可以消耗",
+            "([0-9]+(?:\\.[0-9]+)?)\\s*(MiB|MIB|MB|GiB|GIB|GB)\\b",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -177,7 +174,7 @@ public final class ConnectionService implements AutoCloseable {
     private void runTunnel(NeoLinkAPI tunnel) {
         try {
             messageHandler.log("NeoLinkMC client is starting.", MessageHandler.LogLevel.INFO);
-            messageHandler.send("正在启动 NeoLinkMC 客户端...", MessageHandler.MessageType.INFO);
+            messageHandler.send("Starting NeoLinkMC client...", MessageHandler.MessageType.INFO);
             tunnel.start(DEFAULT_CONNECT_TIMEOUT_MILLIS);
         } catch (Exception e) {
             if (startingOrRunning.get()) {
@@ -191,8 +188,9 @@ public final class ConnectionService implements AutoCloseable {
             startingOrRunning.set(false);
             client = null;
             workerThread = null;
+            NeoLinkCore.clearConnectionService(this);
             messageHandler.log("NeoLink tunnel has stopped.", MessageHandler.LogLevel.INFO);
-            messageHandler.send("NeoLink 隧道已停止。", MessageHandler.MessageType.INFO);
+            messageHandler.send("NeoLink tunnel has stopped.", MessageHandler.MessageType.INFO);
         }
     }
 
@@ -204,14 +202,14 @@ public final class ConnectionService implements AutoCloseable {
                 ConnectionConfig activeConfig = config;
                 if (activeConfig != null) {
                     messageHandler.send(
-                            "正在连接 " + activeConfig.remoteDomain() + "...",
+                            "Connecting to " + activeConfig.remoteDomain() + "...",
                             MessageHandler.MessageType.INFO
                     );
                 }
             }
-            case RUNNING -> messageHandler.send("NeoLink 隧道已连接。", MessageHandler.MessageType.SUCCESS);
-            case STOPPING -> messageHandler.send("正在停止 NeoLink 隧道...", MessageHandler.MessageType.INFO);
-            case FAILED -> messageHandler.send("NeoLink 隧道异常断开。", MessageHandler.MessageType.ERROR);
+            case RUNNING -> messageHandler.send("NeoLink tunnel connected.", MessageHandler.MessageType.SUCCESS);
+            case STOPPING -> messageHandler.send("Stopping NeoLink tunnel...", MessageHandler.MessageType.INFO);
+            case FAILED -> messageHandler.send("NeoLink tunnel disconnected unexpectedly.", MessageHandler.MessageType.ERROR);
             case STOPPED -> {
             }
         }
@@ -233,7 +231,7 @@ public final class ConnectionService implements AutoCloseable {
 
     public void onError(String message, Throwable cause) {
         String detail = cause == null || cause.getMessage() == null ? message : message + " " + cause.getMessage();
-        messageHandler.send(summarizeErrorForChat(message, cause), MessageHandler.MessageType.ERROR);
+        messageHandler.send(summarizeErrorForChat(cause), MessageHandler.MessageType.ERROR);
         if (cause != null) {
             messageHandler.log(detail, MessageHandler.LogLevel.ERROR, cause);
         }
@@ -262,12 +260,12 @@ public final class ConnectionService implements AutoCloseable {
         return unit.startsWith("G") ? amount * 1024.0D : amount;
     }
 
-    private static String summarizeErrorForChat(String message, Throwable cause) {
+    private static String summarizeErrorForChat(Throwable cause) {
         String causeMessage = cause == null ? null : cause.getMessage();
         if (causeMessage == null || causeMessage.isBlank()) {
-            return "NeoLink 连接失败，完整异常已写入日志。";
+            return "NeoLink connection failed. Full details were written to the log.";
         }
-        return "NeoLink 连接失败：" + causeMessage + "。完整异常已写入日志。";
+        return "NeoLink connection failed: " + causeMessage + ". Full details were written to the log.";
     }
 
     public void onConnect(String protocol, String sourceAddress, String targetAddress) {

@@ -11,7 +11,6 @@ import org.jetbrains.annotations.NotNull;
  * 3. 单一职责 - 只负责消息的展示和日志记录
  *
  * @author NeoProxy Team
- * @version 0.3.1
  */
 public interface MessageHandler {
 
