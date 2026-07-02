@@ -115,7 +115,7 @@ public final class UUIDFixer {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            NeoLinkCore.LOGGER.debug("Failed to fetch official UUID for {}", normalizedName, e);
+            NeoLinkCore.LOGGER.debug("获取正版玩家编号失败：{}", normalizedName, e);
             return null;
         }
     }

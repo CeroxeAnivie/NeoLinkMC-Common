@@ -66,7 +66,7 @@ public final class NeoLinkCore {
         ConnectionService nextService;
         synchronized (SERVICE_LOCK) {
             if (connectionService != null && connectionService.isRunning()) {
-                LOGGER.warn("NeoLink service is already starting or running; duplicate start request ignored.");
+                LOGGER.warn("内网穿透服务已经在启动或运行中，已忽略重复启动请求。");
                 return;
             }
 
@@ -132,7 +132,7 @@ public final class NeoLinkCore {
 
     public static void updateLocalPort(int port) {
         LOGGER.debug("updateLocalPort() called with port: {}", port);
-        LOGGER.warn("Local port hot-reload is not supported after startup. Restart the tunnel with the new LAN port.");
+        LOGGER.warn("启动后不支持热重载本地端口，请使用新的局域网端口重新启动内网穿透。");
     }
 
     public static void updateConnectionService(ConnectionService service) {
@@ -180,7 +180,7 @@ public final class NeoLinkCore {
 
     public static void onTitleScreenTick() {
         if (isRunning()) {
-            LOGGER.info("Detected title screen while tunnel is active; shutting down NeoLink service.");
+            LOGGER.info("检测到已返回标题界面，正在关闭仍处于活动状态的内网穿透服务。");
             stopService();
         }
     }

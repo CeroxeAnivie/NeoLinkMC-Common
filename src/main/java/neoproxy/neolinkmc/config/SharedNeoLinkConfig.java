@@ -76,7 +76,7 @@ public final class SharedNeoLinkConfig {
             return;
         }
 
-        throw new IllegalStateException("Unable to initialize NeoLink config from bundled template: " + TEMPLATE_PATH);
+        throw new IllegalStateException("无法从内置模板初始化内网穿透配置：" + TEMPLATE_PATH);
     }
 
     private static boolean copyTemplateConfig() {

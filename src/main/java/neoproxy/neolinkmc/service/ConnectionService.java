@@ -13,7 +13,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Loader-neutral adapter for the NeoLink tunnel lifecycle.
+ * 加载器无关的内网穿透生命周期适配器。
  */
 public final class ConnectionService implements AutoCloseable {
     private static final int DEFAULT_CONNECT_TIMEOUT_MILLIS = 5_000;
@@ -40,7 +40,7 @@ public final class ConnectionService implements AutoCloseable {
     public void start(ConnectionConfig nextConfig) {
         Objects.requireNonNull(nextConfig, "nextConfig");
         if (!startingOrRunning.compareAndSet(false, true)) {
-            messageHandler.log("NeoLink tunnel is already starting or running.", MessageHandler.LogLevel.WARN);
+            messageHandler.log("内网穿透已经在启动或运行中。", MessageHandler.LogLevel.WARN);
             return;
         }
 
@@ -61,7 +61,7 @@ public final class ConnectionService implements AutoCloseable {
             startingOrRunning.set(false);
             client = null;
             workerThread = null;
-            onError("Failed to initialize NeoLink tunnel.", e);
+            onError("初始化内网穿透失败。", e);
         }
     }
 
@@ -122,13 +122,13 @@ public final class ConnectionService implements AutoCloseable {
                 .setUDPEnabled(false);
 
         messageHandler.log(
-                "NeoLink runtime config: remote=" + nextConfig.remoteDomain()
-                        + ", hookPort=" + nextConfig.hookPort()
-                        + ", hostConnectPort=" + nextConfig.hostConnectPort()
-                        + ", localDomain=" + nextConfig.localDomain()
-                        + ", localPort=" + nextConfig.localPort()
-                        + ", key=" + describeKey(nextConfig.key())
-                        + ", tcp=true, udp=false",
+                "内网穿透运行配置：远程地址=" + nextConfig.remoteDomain()
+                        + "，回调端口=" + nextConfig.hookPort()
+                        + "，主机连接端口=" + nextConfig.hostConnectPort()
+                        + "，本地域名=" + nextConfig.localDomain()
+                        + "，本地端口=" + nextConfig.localPort()
+                        + "，密钥=" + describeKey(nextConfig.key())
+                        + "，启用 TCP=true，启用 UDP=false",
                 MessageHandler.LogLevel.INFO
         );
 
@@ -153,12 +153,12 @@ public final class ConnectionService implements AutoCloseable {
 
     private static String describeKey(String key) {
         if (key == null || key.isBlank()) {
-            return "blank";
+            return "空";
         }
         if (ConnectionConfig.DEFAULT_KEY.equals(key)) {
-            return "default(" + ConnectionConfig.DEFAULT_KEY.length() + " chars)";
+            return "默认密钥（" + ConnectionConfig.DEFAULT_KEY.length() + " 个字符）";
         }
-        return "custom(" + key.length() + " chars)";
+        return "自定义密钥（" + key.length() + " 个字符）";
     }
 
     private static TunnelState toTunnelState(NeoLinkState state) {
@@ -173,13 +173,13 @@ public final class ConnectionService implements AutoCloseable {
 
     private void runTunnel(NeoLinkAPI tunnel) {
         try {
-            messageHandler.log("NeoLinkMC client is starting.", MessageHandler.LogLevel.INFO);
-            messageHandler.send("Starting NeoLinkMC client...", MessageHandler.MessageType.INFO);
+            messageHandler.log("内网穿透客户端正在启动。", MessageHandler.LogLevel.INFO);
+            messageHandler.send("正在启动内网穿透客户端...", MessageHandler.MessageType.INFO);
             tunnel.start(DEFAULT_CONNECT_TIMEOUT_MILLIS);
         } catch (Exception e) {
             if (startingOrRunning.get()) {
                 state = stopRequested ? TunnelState.STOPPED : TunnelState.FAILED;
-                onError("NeoLink tunnel failed while starting or running.", e);
+                onError("内网穿透启动或运行时失败。", e);
             }
         } finally {
             if (state != TunnelState.FAILED || stopRequested) {
@@ -189,27 +189,27 @@ public final class ConnectionService implements AutoCloseable {
             client = null;
             workerThread = null;
             NeoLinkCore.clearConnectionService(this);
-            messageHandler.log("NeoLink tunnel has stopped.", MessageHandler.LogLevel.INFO);
-            messageHandler.send("NeoLink tunnel has stopped.", MessageHandler.MessageType.INFO);
+            messageHandler.log("内网穿透已停止。", MessageHandler.LogLevel.INFO);
+            messageHandler.send("内网穿透已停止。", MessageHandler.MessageType.INFO);
         }
     }
 
     public void onStateChanged(TunnelState nextState) {
         state = nextState;
-        messageHandler.log("NeoLink tunnel state changed: " + nextState, MessageHandler.LogLevel.INFO);
+        messageHandler.log("内网穿透状态变更：" + nextState, MessageHandler.LogLevel.INFO);
         switch (nextState) {
             case STARTING -> {
                 ConnectionConfig activeConfig = config;
                 if (activeConfig != null) {
                     messageHandler.send(
-                            "Connecting to " + activeConfig.remoteDomain() + "...",
+                            "正在连接到 " + activeConfig.remoteDomain() + "...",
                             MessageHandler.MessageType.INFO
                     );
                 }
             }
-            case RUNNING -> messageHandler.send("NeoLink tunnel connected.", MessageHandler.MessageType.SUCCESS);
-            case STOPPING -> messageHandler.send("Stopping NeoLink tunnel...", MessageHandler.MessageType.INFO);
-            case FAILED -> messageHandler.send("NeoLink tunnel disconnected unexpectedly.", MessageHandler.MessageType.ERROR);
+            case RUNNING -> messageHandler.send("内网穿透已连接。", MessageHandler.MessageType.SUCCESS);
+            case STOPPING -> messageHandler.send("正在停止内网穿透...", MessageHandler.MessageType.INFO);
+            case FAILED -> messageHandler.send("内网穿透连接异常断开。", MessageHandler.MessageType.ERROR);
             case STOPPED -> {
             }
         }
@@ -219,7 +219,7 @@ public final class ConnectionService implements AutoCloseable {
         if (message == null || message.isBlank()) {
             return;
         }
-        messageHandler.log("NeoLink server message: " + message, MessageHandler.LogLevel.INFO);
+        messageHandler.log("内网穿透服务器消息：" + message, MessageHandler.LogLevel.INFO);
         if (isTrafficQuotaMessage(message)) {
             if (shouldShowTrafficQuotaInChat(message)) {
                 messageHandler.send(message, MessageHandler.MessageType.WARNING);
@@ -263,28 +263,28 @@ public final class ConnectionService implements AutoCloseable {
     private static String summarizeErrorForChat(Throwable cause) {
         String causeMessage = cause == null ? null : cause.getMessage();
         if (causeMessage == null || causeMessage.isBlank()) {
-            return "NeoLink connection failed. Full details were written to the log.";
+            return "内网穿透连接失败，完整信息已写入日志。";
         }
-        return "NeoLink connection failed: " + causeMessage + ". Full details were written to the log.";
+        return "内网穿透连接失败：" + causeMessage + "。完整信息已写入日志。";
     }
 
     public void onConnect(String protocol, String sourceAddress, String targetAddress) {
         messageHandler.log(
-                protocol + " connection " + sourceAddress + " -> " + targetAddress + " established.",
+                protocol + " 连接已建立：" + sourceAddress + " -> " + targetAddress,
                 MessageHandler.LogLevel.INFO
         );
     }
 
     public void onDisconnect(String protocol, String sourceAddress, String targetAddress) {
         messageHandler.log(
-                protocol + " connection " + sourceAddress + " -> " + targetAddress + " closed.",
+                protocol + " 连接已关闭：" + sourceAddress + " -> " + targetAddress,
                 MessageHandler.LogLevel.INFO
         );
     }
 
     public void onDebug(String message, Throwable cause) {
         if (cause != null) {
-            String detail = message == null || message.isBlank() ? "NeoLinkAPI debug exception" : message;
+            String detail = message == null || message.isBlank() ? "内网穿透调试异常" : message;
             messageHandler.log(detail, MessageHandler.LogLevel.DEBUG, cause);
             return;
         }
